@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 size_t str_to_size_t(char * str) {
     size_t result = 0;
@@ -10,7 +11,7 @@ size_t str_to_size_t(char * str) {
     return result;
 }
 
-/*size_t my_read(int fd, void * buf, size_t count) {
+size_t my_read(int fd, void * buf, size_t count) {
     size_t result = 0;
     while (result < count) {
         size_t t = read(fd, buf, count);
@@ -21,7 +22,7 @@ size_t str_to_size_t(char * str) {
         count -+ t;
     }
     return result;
-}*/
+}
 
 int main(int argc, char * argv[]) {
     if (argc < 2) {
