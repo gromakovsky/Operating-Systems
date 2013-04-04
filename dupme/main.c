@@ -11,19 +11,6 @@ size_t str_to_size_t(char * str) {
     return result;
 }
 
-size_t my_read(int fd, void * buf, size_t count) {
-    size_t result = 0;
-    while (result < count) {
-        size_t t = read(fd, buf, count);
-        if (t < 1 || count == 0) {
-            break;
-        }
-        result += t;
-        count -+ t;
-    }
-    return result;
-}
-
 int main(int argc, char * argv[]) {
     if (argc < 2) {
         char * error_msg = "Error!";
@@ -40,7 +27,7 @@ int main(int argc, char * argv[]) {
     size_t len = 0;
 
     int eof = 0, ignore = 0;
-    while(1) {
+    while(!eof) {
         size_t r = read(0, buf + len, k - len);
         len += r;
         if (r < 0) {
@@ -54,24 +41,19 @@ int main(int argc, char * argv[]) {
         for (i = 0; i != len; ++i) {
             if (buf[i] == '\n') {
                 if (ignore) {
-                    len = len - i - 1;
-                    memmove(buf, buf + i + 1, len);
                     ignore = 0;
                 } else {
                     write(1, buf, i + 1);
                     write(1, buf, i + 1);
-                    len = len - i - 1;
-                    memmove(buf, buf + i + 1, len);
                 }
+                len = len - i - 1;
+                memmove(buf, buf + i + 1, len);
                 break; 
             }
         }
         if (i == k) {
             ignore = 1;
             len = 0;
-        }
-        if (eof) {
-            break;
         }
     }
 
