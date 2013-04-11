@@ -1,0 +1,26 @@
+#!/bin/bash
+
+if [[ "$#" < 2 ]]; then
+    echo "Error, not enough args"
+    exit 0
+fi
+
+interval="$1"
+shift
+command_name="$@"
+old=`$command_name`
+
+while :; do
+    sleep $interval
+    new=`$command_name`
+    echo "Result:"
+    echo $new
+    diff="$( diff -u <(echo "$old") <(echo "$new") )"
+    if [ "$diff" ]; then
+        echo "Unified diff:"
+        echo $diff
+    fi
+    old="$new"
+done
+
+exit 0
