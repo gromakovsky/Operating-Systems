@@ -1,0 +1,5 @@
+#!/bin/bash
+
+find "$1" -print0 | ./filter -z ./predicat
+
+exit 0

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+file_date=`stat -c %Z "$1"`
+cur_time=`date +%s`
+
+(( sec_in_day=60*60*24 ))
+(( delta=(cur_time-file_date)/$sec_in_day ))
+
+if [ "$delta" -lt 2 ]; then
+    exit 1
+fi
+
+if [ "$delta" -gt  5 ]; then
+    exit 1
+fi
+
+exit 0
