@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ $# = 0 ]; then
+    echo "Error, not enough args"
+    exit 0
+fi
+
+scan() {
+    for name in $@; do
+        if [ -d "$name" ]; then
+            scan "$name/*"
+        fi
+        if [[ -L "$name" && ! -e "$name" ]]; then
+            echo "$name"
+        fi
+    done
+}
+
+scan "$@"
+exit 0
+
