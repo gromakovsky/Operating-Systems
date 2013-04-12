@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#define big_number 100
 
 char * cmd;
 int _argc;
@@ -18,36 +17,49 @@ int find(char delim, const char * buf, size_t from, size_t len) {
 }
 
 void run_cmd(char * buf, size_t from, size_t len) {
-    char * last_arg = malloc(len);
+    char * last_arg = malloc(len + 1);
     memcpy(last_arg, buf + from, len);
+    last_arg[len] = 0;
     _argv[_argc + 1] = last_arg;
     _argv[_argc + 2] = NULL;
-//    printf("cmd: %s _argv[0]: %s _argv[1]: %s _argv[2]: %s\n", cmd, _argv[0], _argv[1], _argv[2]);
-    execvp(cmd, _argv);
-    free(last_arg);
+    pid_t pid = fork();
+    if (pid) {
+        pid_t wpid;
+        int status;
+        do {
+            wpid = wait(&status);
+            if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+                write(1, "Ok with ", 8);
+                write(1, last_arg, len);
+                write(1, "\n", 1);
+            }
+        } while (wpid != pid);
+        free(last_arg);
+    } else {
+        execvp(cmd, _argv);
+    }
 }
 
 int main(int argc, char * argv[]) {
     int opt;
-    int n, z;
+    char delim = '\n';
     int buffer_size = 4096;
     int index;
-    while ((opt = getopt(argc, argv, "nzb:")) != -1) {
-        int flag = 0;
+    int flag = 0;
+    while ((opt = getopt(argc, argv, "+nzb:")) != -1) {
         switch (opt) {
         case 'n':
-            n = 1;
-            z = 0;
+            delim = '\n';
             break;
         case 'z':
-            z = 1;
-            n = 0;
+            delim = '\0';
             break;
         case 'b':
             buffer_size = atoi(optarg);
             break;
         default:
             flag = 1;
+            break;
         }
         if (flag) break;
     }
@@ -61,9 +73,8 @@ int main(int argc, char * argv[]) {
         }
     }
     _argc = argc - index - 1;
-    _argv = malloc(_argc + 3);
+    _argv = malloc(4 * (_argc + 3));
     bcopy(argv + index + 1, _argv + 1, _argc * 4);
-//    printf("_argv[2]: %s\n", _argv[2]);
     _argv[0] = cmd;
     ++buffer_size;
 
@@ -82,18 +93,20 @@ int main(int argc, char * argv[]) {
         eof = !r;
         from = len;
         len += r;
-        while ((delim_pos = find(n ? '\n' : 0, buffer, from, len - from)) >= 0) {
+        delim_pos = find(delim, buffer, from, len - from);
+        while (delim_pos >= 0) {
             run_cmd(buffer, 0, delim_pos);
             memmove(buffer, buffer + delim_pos + 1, len - (delim_pos + 1));
             from = 0;
-            len -= delim_pos;
+            len -= delim_pos + 1;
+            delim_pos = find(delim, buffer, from, len - from);
         }
     }
     if (len > 0) {
         if (len + 1 >= buffer_size) {
             exit(EXIT_FAILURE);
         }
-        buffer[len + 1] = n ? '\n' : 0;
+        buffer[len + 1] = delim;
         run_cmd(buffer, 0, len + 1);
     }    
 
