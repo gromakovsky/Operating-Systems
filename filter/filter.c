@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 
 char * cmd;
 int _argc;
@@ -18,7 +20,7 @@ int find(char delim, const char * buf, size_t from, size_t len) {
 
 void run_cmd(char * buf, size_t from, size_t len) {
     char * last_arg = malloc(len + 1);
-    memcpy(last_arg, buf + from, len);
+    memcpy(last_arg, buf + from, sizeof(char) * len);
     last_arg[len] = 0;
     _argv[_argc + 1] = last_arg;
     _argv[_argc + 2] = NULL;
@@ -29,7 +31,6 @@ void run_cmd(char * buf, size_t from, size_t len) {
         do {
             wpid = wait(&status);
             if (WIFEXITED(status) && !WEXITSTATUS(status)) {
-                write(1, "Ok with ", 8);
                 write(1, last_arg, len);
                 write(1, "\n", 1);
             }
@@ -73,8 +74,8 @@ int main(int argc, char * argv[]) {
         }
     }
     _argc = argc - index - 1;
-    _argv = malloc(4 * (_argc + 3));
-    bcopy(argv + index + 1, _argv + 1, _argc * 4);
+    _argv = malloc(sizeof(char *) * (_argc + 3));
+    memcpy(argv + index + 1, _argv + 1, _argc * sizeof(char *));
     _argv[0] = cmd;
     ++buffer_size;
 
@@ -96,7 +97,7 @@ int main(int argc, char * argv[]) {
         delim_pos = find(delim, buffer, from, len - from);
         while (delim_pos >= 0) {
             run_cmd(buffer, 0, delim_pos);
-            memmove(buffer, buffer + delim_pos + 1, len - (delim_pos + 1));
+            memmove(buffer, buffer + delim_pos + 1, sizeof(char) * (len - (delim_pos + 1)));
             from = 0;
             len -= delim_pos + 1;
             delim_pos = find(delim, buffer, from, len - from);
