@@ -7,7 +7,8 @@
 char * cmd;
 int _argc;
 char ** _argv;
-int find(char delim, const char * buf, size_t from, size_t len) {
+
+int find_delim(char delim, const char * buf, size_t from, size_t len) {
     size_t i;
     for (i = from; i != from + len; ++i) {
         if (buf[i] == delim) {
@@ -15,6 +16,17 @@ int find(char delim, const char * buf, size_t from, size_t len) {
         }        
     }
     return -1;
+}
+
+void write_all(int fd, char * buf, size_t count) {
+    int written = 0;
+    for (; written < count; ) {
+        int write_res = write(fd, buf, count - written);
+        if (write_res < 0) {
+            _exit(EXIT_FAILURE);
+        }
+        written += write_res;
+    }
 }
 
 void run_cmd(char * buf, size_t from, size_t len) {
@@ -30,14 +42,14 @@ void run_cmd(char * buf, size_t from, size_t len) {
         do {
             wpid = wait(&status);
             if (WIFEXITED(status) && !WEXITSTATUS(status)) {
-                write(1, last_arg, len);
-                write(1, "\n", 1);
+                write_all(1, last_arg, len);
+                write_all(1, "\n", 1);
             }
         } while (wpid != pid);
         free(last_arg);
     } else {
         execvp(cmd, _argv);
-        _exit(0);
+        _exit(EXIT_SUCCESS);
     }
 }
 
@@ -88,24 +100,24 @@ int main(int argc, char * argv[]) {
     int delim_pos;
     while (!eof) {
         if (len >= buffer_size) {
-            exit(EXIT_FAILURE);
+            _exit(EXIT_FAILURE);
         }
         r = read(0, buffer + len, buffer_size - len);
         eof = !r;
         from = len;
         len += r;
-        delim_pos = find(delim, buffer, from, len - from);
+        delim_pos = find_delim(delim, buffer, from, len - from);
         while (delim_pos >= 0) {
             run_cmd(buffer, 0, delim_pos);
             memmove(buffer, buffer + delim_pos + 1, sizeof(char) * (len - (delim_pos + 1)));
             from = 0;
             len -= delim_pos + 1;
-            delim_pos = find(delim, buffer, from, len - from);
+            delim_pos = find_delim(delim, buffer, from, len - from);
         }
     }
     if (len > 0) {
         if (len + 1 >= buffer_size) {
-            exit(EXIT_FAILURE);
+            _exit(EXIT_FAILURE);
         }
         buffer[len + 1] = delim;
         run_cmd(buffer, 0, len + 1);
@@ -115,5 +127,5 @@ int main(int argc, char * argv[]) {
     free(cmd);
     free(buffer);
     free(_argv);
-    return 0;
+    _exit(EXIT_SUCCESS);
 }

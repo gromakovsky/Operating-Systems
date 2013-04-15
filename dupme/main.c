@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 size_t str_to_size_t(char * str) {
     size_t result = 0;
@@ -11,19 +12,29 @@ size_t str_to_size_t(char * str) {
     return result;
 }
 
+void write_all(int fd, char * buf, size_t count) {
+    int written = 0;
+    for (; written < count; ) {
+        int write_res = write(fd, buf, count - written);
+        if (write_res < 0) {
+            _exit(EXIT_FAILURE);
+        }
+        written += write_res;
+    }
+}
+
 int main(int argc, char * argv[]) {
     if (argc < 2) {
-        char * error_msg = "Error!";
-        write(1, error_msg, 6);
-        return 1;
+        write_all(1, "Error!", 6);
+        _exit(EXIT_FAILURE);
     }
     size_t k = str_to_size_t(argv[1]);
     if (k < 1) {
-        return 1;
+        write_all(1, "Error!", 6);
+        _exit(EXIT_FAILURE);
     }
     ++k;
     char * buf = malloc(k + 1);
-    char * new_line = "\n";
     size_t len = 0;
 
     int eof = 0, ignore = 0;
@@ -43,11 +54,11 @@ int main(int argc, char * argv[]) {
                 if (ignore) {
                     ignore = 0;
                 } else {
-                    write(1, buf, i + 1);
-                    write(1, buf, i + 1);
+                    write_all(1, buf, i + 1);
+                    write_all(1, buf, i + 1);
                 }
                 len = len - i - 1;
-                memmove(buf, buf + i + 1, len);
+                memmove(buf, buf + i + 1, sizeof(char) * len);
                 break; 
             }
         }
@@ -58,5 +69,5 @@ int main(int argc, char * argv[]) {
     }
 
     free(buf);
-    return 0;
+    _exit(EXIT_SUCCESS);
 }
