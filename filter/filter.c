@@ -37,6 +37,7 @@ void run_cmd(char * buf, size_t from, size_t len) {
         free(last_arg);
     } else {
         execvp(cmd, _argv);
+        _exit(0);
     }
 }
 
