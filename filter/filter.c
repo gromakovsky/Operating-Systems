@@ -75,7 +75,7 @@ int main(int argc, char * argv[]) {
     }
     _argc = argc - index - 1;
     _argv = malloc(sizeof(char *) * (_argc + 3));
-    memcpy(argv + index + 1, _argv + 1, _argc * sizeof(char *));
+    bcopy(argv + index + 1, _argv + 1, _argc * sizeof(char *));
     _argv[0] = cmd;
     ++buffer_size;
 
