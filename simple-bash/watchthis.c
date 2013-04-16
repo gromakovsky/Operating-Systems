@@ -31,17 +31,25 @@ void my_run(char * argv[], int * pipefd) {
     }
 }
 
-void my_read(int fd, int * len) {
+void run_diff() {
+    if (fork()) {
+        wait(NULL);
+    } else {
+        execlp("diff", "diff", "-u", FIFO1, FIFO2, NULL);
+        _exit(EXIT_SUCCESS);
+    }
+}
+
+void my_read(int fd, size_t * len) {
     int r;
-    while ((r = read(fd, new_buffer + *len, buffer_size - *len) > 0)) {
+    while ((r = read(fd, new_buffer + *len, buffer_size - *len)) > 0) {
         *len += r;
-        printf("%d %d\n", *len, r);
         if (*len == buffer_size) {
             buffer_size *= 2;
             new_buffer = realloc(new_buffer, buffer_size);
             old_buffer = realloc(old_buffer, buffer_size);
         }
-    }    
+    }
 }
 
 void write_all(int fd, char * buffer, size_t count) {
@@ -70,16 +78,35 @@ int main(int argc, char * argv[]) {
     int pipefd[2];    
     new_buffer = malloc(buffer_size);
     old_buffer = malloc(buffer_size);
-    int len = 0;
+    size_t len = 0;
+    size_t old_len = 0;
     while (1) {
         pipe(pipefd);
         my_run(argv + 2, pipefd);
-//        dup2(pipefd[0], STDIN_FILENO);
+        dup2(pipefd[0], STDIN_FILENO);
         close(pipefd[1]);
         my_read(pipefd[0], &len);
         close(pipefd[0]);
 
         write_all(STDOUT_FILENO, new_buffer, len);
+        
+        if (old_len) {
+            int fifo1_fd = open(FIFO1, O_WRONLY);
+            int fifo2_fd = open(FIFO2, O_WRONLY);
+        
+            write_all(fifo1_fd, new_buffer, len);
+            write_all(fifo2_fd, old_buffer, old_len);
+            close(fifo1_fd);
+            close(fifo2_fd);
+//            run_diff();
+        }
+
+        old_len = len;
+        len = 0;
+        char * tmp = new_buffer;
+        new_buffer = old_buffer;
+        old_buffer = tmp;
+
         sleep(interval);
     }
     free(old_buffer);
