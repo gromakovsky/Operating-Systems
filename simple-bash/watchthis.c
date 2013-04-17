@@ -1,43 +1,23 @@
 #include <unistd.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 
 char * FIFO1 = "/tmp/watchthis_FIFO1";
 char * FIFO2 = "/tmp/watchthis_FIFO2";
 
 char * new_buffer;
 char * old_buffer;
-size_t buffer_size = 4096;
+size_t buffer_size = 4;
 
 void my_exit(int status) {
     remove(FIFO1);
     remove(FIFO2);
     _exit(status);
-}
-
-void my_run(char * argv[], int * pipefd) {
-    if (fork()) {
-        wait(NULL);
-    } else {
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[0]);
-        close(pipefd[1]);
-        execvp(argv[0], argv);
-        _exit(EXIT_SUCCESS);
-    }
-}
-
-void run_diff() {
-    if (fork()) {
-        wait(NULL);
-    } else {
-        execlp("diff", "diff", "-u", FIFO1, FIFO2, NULL);
-        _exit(EXIT_SUCCESS);
-    }
 }
 
 void my_read(int fd, size_t * len) {
@@ -63,6 +43,35 @@ void write_all(int fd, char * buffer, size_t count) {
     }
 }
 
+void my_run(char * argv[], int * pipefd) {
+    if (fork()) {
+        wait(NULL);
+    } else {
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+        execvp(argv[0], argv);
+        _exit(EXIT_SUCCESS);
+    }
+}
+
+void run_diff(size_t len, size_t old_len) {
+    if (fork()) {
+        int fifo1_fd = open(FIFO1, O_WRONLY);
+        int fifo2_fd = open(FIFO2, O_WRONLY);
+    
+        write_all(fifo1_fd, new_buffer, len);
+        write_all(fifo2_fd, old_buffer, old_len);
+        close(fifo1_fd);
+        close(fifo2_fd);
+
+        wait(NULL);
+    } else {
+        execlp("diff", "diff", "-u", FIFO1, FIFO2, NULL);
+        _exit(EXIT_SUCCESS);
+    }
+}
+
 int main(int argc, char * argv[]) {
     if (argc < 2) {
         write_all(1, "Error, not enough args\n", 23);
@@ -74,6 +83,9 @@ int main(int argc, char * argv[]) {
     if (mkfifo(FIFO1, S_IRUSR | S_IWUSR) || mkfifo(FIFO2, S_IRUSR | S_IWUSR)) {
         my_exit(EXIT_FAILURE);
     }
+
+    signal(SIGINT, my_exit);
+    signal(SIGTERM, my_exit);
 
     int pipefd[2];    
     new_buffer = malloc(buffer_size);
@@ -89,16 +101,9 @@ int main(int argc, char * argv[]) {
         close(pipefd[0]);
 
         write_all(STDOUT_FILENO, new_buffer, len);
-        
-        if (old_len) {
-            int fifo1_fd = open(FIFO1, O_WRONLY);
-            int fifo2_fd = open(FIFO2, O_WRONLY);
-        
-            write_all(fifo1_fd, new_buffer, len);
-            write_all(fifo2_fd, old_buffer, old_len);
-            close(fifo1_fd);
-            close(fifo2_fd);
-//            run_diff();
+
+        if (strcmp(new_buffer, old_buffer) && old_len) {
+            run_diff(len, old_len);
         }
 
         old_len = len;
@@ -111,5 +116,5 @@ int main(int argc, char * argv[]) {
     }
     free(old_buffer);
     free(new_buffer);
-    _exit(EXIT_SUCCESS);
+    my_exit(EXIT_SUCCESS);
 }
