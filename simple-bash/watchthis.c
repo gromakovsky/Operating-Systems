@@ -12,7 +12,7 @@ char * FIFO2 = "/tmp/watchthis_FIFO2";
 
 char * new_buffer;
 char * old_buffer;
-size_t buffer_size = 4;
+size_t buffer_size = 4096;
 
 void my_exit(int status) {
     remove(FIFO1);
