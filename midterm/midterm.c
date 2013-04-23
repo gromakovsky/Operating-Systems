@@ -34,7 +34,7 @@ int main(int argc, char * argv[]) {
     size_t old_len = -1;
     size_t old_string_len = 0;
     size_t old_string_size = 4096;
-    old_string = malloc(old_string_size);
+    old_string = malloc(old_string_size * sizeof(char));
     strcpy(old_string, "\0");
 
     int fd = open(file_name, S_IRUSR);
@@ -48,24 +48,34 @@ int main(int argc, char * argv[]) {
         len += r;
         if (len == buffer_size) {
             buffer_size *= 2;
-            buffer = realloc(buffer, buffer_size);
+            buffer = realloc(buffer, buffer_size * sizeof(char));
+        }
+        if (len <= buffer_size / 4) {
+            buffer_size /= 2;
+            buffer = realloc(buffer, buffer_size * sizeof(char));
         }
         size_t i;
-        for (i = old_len; i != len; ++i) {
+        for (i = old_len; i < len; ++i) {
             if (buffer[i] == delim) {
                 buffer[i] = '\0';
-//                printf("Old:%s\nNew:%s\n\n", old_string, buffer);
 
                 if (strcmp(old_string, buffer) < 0) {
                     write_all(STDOUT_FILENO, buffer, i);
                 }
 
+                if (old_string_size < len) {
+                    old_string_size = len;
+                    old_string = realloc(old_string, old_string_size * sizeof(char));
+                }
                 strcpy(old_string, buffer);
-                memmove(buffer, buffer + i + 1, len - i);
+                memmove(buffer, buffer + i + 1, (len - i) * sizeof(char));
                 len -= (i + 1);
                 i = 0;
             }
         }
+    }
+    if (r < 0) {
+        _exit(EXIT_FAILURE);
     }
 
     free(buffer);
