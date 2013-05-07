@@ -4,15 +4,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <signal.h>
 
-const char * FIFO1 = "/tmp/midterm2_FIFO1";
-const char * FIFO2 = "/tmp/midterm2_FIFO2";
-const char * input_name = "input.txt";
-const char * for_garbage = "/dev/null";
-const char delim = '\0';
-const size_t capacity = 4096;
+const char * INPUT_NAME = "input.txt";
+const char * FOR_GARBAGE = "/dev/null";
+const char DELIM = '\0';
+const size_t CAPACITY = 4096;
 
 char * cur_command;
 short cur_command_known = 0;
@@ -24,16 +23,10 @@ char * output;
 
 int pipefd[2];
 
-void my_exit(int status) {
-    remove(FIFO1);
-    remove(FIFO2);
-    _exit(status);
-}
-
 int my_read(int fd, char * buf) {
     int r;
     int len = 0;
-    while ((r = read(fd, buf + len, capacity - len)) > 0) {
+    while ((r = read(fd, buf + len, CAPACITY - len)) > 0) {
         len += r;
     }
     return r < 0 ? r : len;
@@ -44,33 +37,31 @@ void write_all(int fd, char * buffer, size_t count) {
     for (; written < count; ) {
         int write_res = write(fd, buffer, count - written);
         if (write_res < 0) {
-            my_exit(EXIT_FAILURE);
+            _exit(EXIT_FAILURE);
         }
         written += write_res;
     }
 }
 
 void parse_command(char * command) {
-    const char delim = ' ';
+    const char DELIM = ' ';
 
     int i = 0;
     while (command[i]) {
-        if (command[i] == delim) {
+        if (command[i] == DELIM) {
             command[i] = 0;
-            if (strlen(command) > capacity) {
-                my_exit(EXIT_FAILURE);
+            if (strlen(command) > CAPACITY) {
+                _exit(EXIT_FAILURE);
             }                                    
             if (!cur_command_known) {
                 strcpy(cur_command, command);
-//                printf("command: %s\n", command);
                 cur_command_known = 1;
             } 
             if (default_args_number == max_args_number) {
-                cur_default_args[default_args_number] = malloc(sizeof(char) * capacity);
+                cur_default_args[default_args_number] = malloc(sizeof(char) * CAPACITY);
                 ++max_args_number;
             }
             strcpy(cur_default_args[default_args_number], command);
-//          printf("args %d: %s\n", default_args_number, command);
             ++default_args_number;
             command += (i + 1);
             i = 0;
@@ -78,25 +69,22 @@ void parse_command(char * command) {
             ++i;
         }
     }
-    if (strlen(command) > capacity) {
-        my_exit(EXIT_FAILURE);
+    if (strlen(command) > CAPACITY) {
+        _exit(EXIT_FAILURE);
     }                                    
     if (!cur_command_known) {
         strcpy(cur_command, command);
-//      printf("command: %s\n", command);
         cur_command_known = 1;
     } 
-    if (default_args_number == capacity - 1) {
-        my_exit(EXIT_FAILURE);
+    if (default_args_number == CAPACITY - 1) {
+        _exit(EXIT_FAILURE);
     }
     if (default_args_number == max_args_number) {
-        cur_default_args[default_args_number] = malloc(sizeof(char) * capacity);
+        cur_default_args[default_args_number] = malloc(sizeof(char) * CAPACITY);
         ++max_args_number;
     }
     strcpy(cur_default_args[default_args_number], command);
-//  printf("args %d: %s\n", default_args_number, command);
     ++default_args_number;
-//  printf("%s\n", cur_command);
 }
 
 void run(char * arg) {
@@ -106,8 +94,6 @@ void run(char * arg) {
     cur_default_args[default_args_number] = arg;
     char * tmp2 = cur_default_args[default_args_number + 1];
     cur_default_args[default_args_number + 1] = NULL;
-
-//    printf("run command %s, arg0: %s, arg1: %s\n", cur_command, cur_default_args[0], cur_default_args[1]);
 
     pid_t pid = fork();
     if (pid) {
@@ -125,7 +111,7 @@ void run(char * arg) {
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[0]);
         close(pipefd[1]);
-        int garbage = open(for_garbage, O_WRONLY);
+        int garbage = open(FOR_GARBAGE, O_WRONLY);
         dup2(garbage, STDERR_FILENO);
         close(garbage);
         execvp(cur_command, cur_default_args);
@@ -133,35 +119,27 @@ void run(char * arg) {
 }
 
 int main(int argc, char * argv[]) {
-    int fd = open(input_name, O_RDONLY);
+    int fd = open(INPUT_NAME, O_RDONLY);
     if (fd < 0) {
         _exit(EXIT_FAILURE);
     }
-    cur_command = malloc(sizeof(char) * capacity);
-    cur_default_args = malloc(sizeof(char *) * capacity);
-    output = malloc(sizeof(char) * capacity);
-    char * buf = malloc(sizeof(char) * capacity);
+    cur_command = malloc(sizeof(char) * CAPACITY);
+    cur_default_args = malloc(sizeof(char *) * CAPACITY);
+    output = malloc(sizeof(char) * CAPACITY);
+    char * buf = malloc(sizeof(char) * CAPACITY);
     size_t buf_len = 0;
     short eof = 0;
 
-    if (mkfifo(FIFO1, S_IRUSR | S_IWUSR) || mkfifo(FIFO2, S_IRUSR | S_IWUSR)) {
-        my_exit(EXIT_FAILURE);
-    }
-
-    signal(SIGINT, my_exit);
-    signal(SIGTERM, my_exit);
-    signal(SIGSEGV, my_exit);
-
     while (!eof) {
-        int r = read(fd, buf + buf_len, capacity - buf_len);
+        int r = read(fd, buf + buf_len, CAPACITY - buf_len);
         if (r < 0) {
-            my_exit(EXIT_FAILURE);
+            _exit(EXIT_FAILURE);
         }
         buf_len += r;
         eof = !r;
         int i;        
         for (i = 0; i != buf_len; ++i) {
-            if (buf[i] == delim) {
+            if (buf[i] == DELIM) {
                 if (cur_command_known) {
                     pipe(pipefd);
                     run(buf);
@@ -169,7 +147,7 @@ int main(int argc, char * argv[]) {
                     if (OK) {
                         int tmp = my_read(pipefd[0], output);
                         if (tmp < 0) {
-                            my_exit(EXIT_FAILURE);
+                            _exit(EXIT_FAILURE);
                         }
                         write_all(STDOUT_FILENO, output, tmp); 
                     }
@@ -177,14 +155,15 @@ int main(int argc, char * argv[]) {
                 } else {
                     parse_command(buf);
                 }
-                if (buf[i + 1] == delim) {
+                if (buf[i + 1] == DELIM) {
                     cur_command_known = 0;
                     default_args_number = 0;
                     ++i;
                 }
                 buf_len -= (i + 1);
+//                if (buf_len > 0)
                 memmove(buf, buf + i + 1, buf_len);
-                i = 0;
+                i = -1;
             }
         } 
     }
@@ -197,5 +176,5 @@ int main(int argc, char * argv[]) {
     free(output);
     free(cur_default_args);
     free(cur_command);
-    my_exit(EXIT_SUCCESS);
+    _exit(EXIT_SUCCESS);
 }
