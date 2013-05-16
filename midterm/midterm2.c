@@ -22,10 +22,10 @@ int my_read(int fd, char * buf) {
     return r < 0 ? r : len;
 }
 
-void write_all(int fd, char * buffer, size_t count) {
-    int written = 0;
-    for (; written < count; ) {
-        int write_res = write(fd, buffer, count - written);
+void write_all(int fd, char * buf, size_t count) {
+    size_t written = 0;
+    while (written < count) {
+        int write_res = write(fd, buf, count - written);
         if (write_res < 0) {
             _exit(EXIT_FAILURE);
         }
@@ -33,7 +33,7 @@ void write_all(int fd, char * buffer, size_t count) {
     }
 }
 
-void parse_command(char * command, char * cur_command, char ** cur_default_args, int * default_args_number, int * max_args_number) {
+void parse_command(char * command, char * cur_command, char ** cur_default_args, size_t * default_args_number, size_t * max_args_number) {
     const char DELIM = ' ';
     short flag = 0;
 
@@ -60,6 +60,7 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
             ++i;
         }
     }
+
     if (strlen(command) > CAPACITY) {
         _exit(EXIT_FAILURE);
     }                                    
@@ -78,7 +79,7 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
     ++(*default_args_number);
 }
 
-short run(char * cur_command, char ** cur_default_args, int default_args_number, char * arg, int pipefd[2]) {
+short run(char * cur_command, char ** cur_default_args, size_t default_args_number, char * arg, int pipefd[2]) {
     short OK = 0;
 
     char * tmp = cur_default_args[default_args_number];
@@ -102,15 +103,15 @@ short run(char * cur_command, char ** cur_default_args, int default_args_number,
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[0]);
         close(pipefd[1]);
-        int garbage = open(FOR_GARBAGE, O_WRONLY);
+/*        int garbage = open(FOR_GARBAGE, O_WRONLY);
         dup2(garbage, STDERR_FILENO);
-        close(garbage);
+        close(garbage);*/
         execvp(cur_command, cur_default_args);
     }
     return OK;
 }
 
-int main(int argc, char * argv[]) {
+int main() {
     int fd = open(INPUT_NAME, O_RDONLY);
     if (fd < 0) {
         _exit(EXIT_FAILURE);
@@ -120,8 +121,8 @@ int main(int argc, char * argv[]) {
 
     short cur_command_known = 0;
     char * cur_command = malloc(sizeof(char) * CAPACITY);
-    int default_args_number = 0;
-    int max_args_number = 0;
+    size_t default_args_number = 0;
+    size_t max_args_number = 0;
     char ** cur_default_args = malloc(sizeof(char *) * CAPACITY);
     char * output = malloc(sizeof(char) * CAPACITY);
     char * buf = malloc(sizeof(char) * CAPACITY);
@@ -135,7 +136,7 @@ int main(int argc, char * argv[]) {
         }
         buf_len += r;
         eof = !r;
-        int i;        
+        size_t i;        
         for (i = 0; i != buf_len; ++i) {
             if (buf[i] == DELIM) {
                 if (cur_command_known) {
@@ -166,7 +167,7 @@ int main(int argc, char * argv[]) {
     }
 
     free(buf);
-    int i;
+    size_t i;
     for (i = 0; i != max_args_number; ++i) {
         free(cur_default_args[i]);
     }

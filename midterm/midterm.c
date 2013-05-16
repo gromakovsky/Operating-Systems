@@ -6,16 +6,15 @@
 #include <string.h>
 #include <stdio.h>
 
-void write_all(int fd, char * buffer, size_t count) {
-    int written = 0;
-    for (; written < count; ) {
-        int write_res = write(fd, buffer, count - written);
+void write_all(int fd, char * buf, size_t count) {
+    size_t written = 0;
+    while (written < count) {
+        int write_res = write(fd, buf, count - written);
         if (write_res < 0) {
             _exit(EXIT_FAILURE);
         }
         written += write_res;
     }
-    write(fd, "\n", 1);
 }
 
 int main(int argc, char * argv[]) {
@@ -32,7 +31,7 @@ int main(int argc, char * argv[]) {
     buffer = malloc(buffer_size * sizeof(char));
     size_t len = 0;
     size_t old_len = -1;
-    size_t old_string_len = 0;
+//    size_t old_string_len = 0;
     size_t old_string_size = 4096;
     old_string = malloc(old_string_size * sizeof(char));
     strcpy(old_string, "\0");
