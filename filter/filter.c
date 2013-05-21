@@ -40,15 +40,15 @@ void run_cmd(char * buf, size_t from, size_t len, int cmd_argc, char ** cmd_argv
     cmd_argv[cmd_argc - 1] = last_arg;
     pid_t pid = fork();
     if (pid) {
-        pid_t wpid;
         int status;
-        do {
-            wpid = wait(&status);
-            if (WIFEXITED(status) && !WEXITSTATUS(status)) {
-                write_all(1, last_arg, len);
-                write_all(1, "\n", 1);
-            }
-        } while (wpid != pid);
+        pid_t wpid = wait(&status);
+        if (wpid != pid) {
+            _exit(EXIT_FAILURE);
+        }
+        if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+            write_all(1, last_arg, len);
+            write_all(1, "\n", 1);
+        }
         free(last_arg);
     } else {
         execvp(cmd_argv[0], cmd_argv);
