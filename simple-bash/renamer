@@ -2,13 +2,12 @@
 
 if [ "$#" == 0 ]; then
     echo "Error, name required"
+    exit 1
 fi
 
 for file_name in "$@"; do
-    if [ -f $file_name ]; then
-        echo $file_name
-        echo "New name:"
-        read -e new_file_name
+    if [ -f "$file_name" ]; then
+        read -e -p "Edit file name: " -i "$(basename "$file_name")" new_file_name
         if [ "$new_file_name" ]; then
             mv "$file_name" "$new_file_name"
         fi
