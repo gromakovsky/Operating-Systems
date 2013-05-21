@@ -4,10 +4,6 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
-char * cmd;
-int _argc;
-char ** _argv;
-
 int find_delim(char delim, const char * buf, size_t from, size_t len) {
     size_t i;
     for (i = from; i != from + len; ++i) {
@@ -18,9 +14,17 @@ int find_delim(char delim, const char * buf, size_t from, size_t len) {
     return -1;
 }
 
-void write_all(int fd, char * buf, size_t count) {
-    int written = 0;
-    for (; written < count; ) {
+void * my_malloc(size_t size) {
+    void * res = malloc(size);
+    if (res == NULL) {
+        _exit(EXIT_FAILURE);
+    }
+    return res;
+}
+
+void write_all(int fd, const char * buf, size_t count) {
+    size_t written = 0;
+    while (written < count) {
         int write_res = write(fd, buf, count - written);
         if (write_res < 0) {
             _exit(EXIT_FAILURE);
@@ -29,12 +33,11 @@ void write_all(int fd, char * buf, size_t count) {
     }
 }
 
-void run_cmd(char * buf, size_t from, size_t len) {
-    char * last_arg = malloc(len + 1);
-    memcpy(last_arg, buf + from, sizeof(char) * len);
-    last_arg[len] = 0;
-    _argv[_argc + 1] = last_arg;
-    _argv[_argc + 2] = NULL;
+void run_cmd(char * buf, size_t from, size_t len, int cmd_argc, char ** cmd_argv) {
+    char * last_arg = my_malloc(len + 1);
+    memcpy(last_arg, buf + from, len);
+    last_arg[len] = '\0'; 
+    cmd_argv[cmd_argc - 1] = last_arg;
     pid_t pid = fork();
     if (pid) {
         pid_t wpid;
@@ -48,17 +51,18 @@ void run_cmd(char * buf, size_t from, size_t len) {
         } while (wpid != pid);
         free(last_arg);
     } else {
-        execvp(cmd, _argv);
-        _exit(EXIT_SUCCESS);
+        execvp(cmd_argv[0], cmd_argv);
     }
 }
 
+const size_t CAPACITY = 4096;
+
 int main(int argc, char * argv[]) {
-    int opt;
     char delim = '\n';
-    int buffer_size = 4096;
-    int index;
-    int flag = 0;
+    size_t buffer_size = CAPACITY;
+
+    int opt;
+    int opt_number = 1;
     while ((opt = getopt(argc, argv, "+nzb:")) != -1) {
         switch (opt) {
         case 'n':
@@ -69,63 +73,59 @@ int main(int argc, char * argv[]) {
             break;
         case 'b':
             buffer_size = atoi(optarg);
-            break;
-        default:
-            flag = 1;
+            ++opt_number;
             break;
         }
-        if (flag) break;
+        ++opt_number;
     }
 
-    cmd = malloc(1000);
-    int i = 1;
-    for (index = 1; index != argc; ++index) {
-        if ((argv[index][0] != '-') && (argv[index][0] > '9' || argv[index][0] < '0')) {
-            strcpy(cmd, argv[index]);
-            break; 
-        }
+
+    if (opt_number < argc && !strcmp(argv[opt_number], "--")) {
+        ++opt_number;
     }
-    _argc = argc - index - 1;
-    _argv = malloc(sizeof(char *) * (_argc + 3));
-    bcopy(argv + index + 1, _argv + 1, _argc * sizeof(char *));
-    _argv[0] = cmd;
+    
+    if (opt_number >= argc) {
+        _exit(EXIT_FAILURE);
+    }
+
+    char ** cmd_argv = my_malloc(sizeof(char *) * (argc - opt_number + 2));
+    memcpy(cmd_argv, argv + opt_number, sizeof(char *) * (argc - opt_number));
+    cmd_argv[argc - opt_number + 1] = NULL;
     ++buffer_size;
 
-
-    char * buffer = malloc(buffer_size + 1);
-    int r;
+    char * buffer = my_malloc(buffer_size + 1);
     int eof = 0;
-    int len = 0;
+    size_t len = 0;
     int from;
     int delim_pos;
     while (!eof) {
         if (len >= buffer_size) {
             _exit(EXIT_FAILURE);
         }
-        r = read(0, buffer + len, buffer_size - len);
+        int r = read(0, buffer + len, buffer_size - len);
         eof = !r;
         from = len;
         len += r;
         delim_pos = find_delim(delim, buffer, from, len - from);
         while (delim_pos >= 0) {
-            run_cmd(buffer, 0, delim_pos);
-            memmove(buffer, buffer + delim_pos + 1, sizeof(char) * (len - (delim_pos + 1)));
+            run_cmd(buffer, 0, delim_pos, argc - opt_number + 1, cmd_argv);
+            memmove(buffer, buffer + delim_pos + 1, len - (delim_pos + 1));
             from = 0;
             len -= delim_pos + 1;
             delim_pos = find_delim(delim, buffer, from, len - from);
         }
     }
+
     if (len > 0) {
         if (len + 1 >= buffer_size) {
             _exit(EXIT_FAILURE);
         }
         buffer[len + 1] = delim;
-        run_cmd(buffer, 0, len + 1);
+        run_cmd(buffer, 0, len + 1, argc - opt_number + 1, cmd_argv);
     }    
 
 
-    free(cmd);
     free(buffer);
-    free(_argv);
+    free(cmd_argv);
     _exit(EXIT_SUCCESS);
 }
