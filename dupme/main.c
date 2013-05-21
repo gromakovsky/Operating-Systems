@@ -13,16 +13,21 @@ void write_all(int fd, const char * buf, size_t count) {
     }
 }
 
+void action(int arg1, void * arg2, size_t arg3) {
+    write_all(arg1, arg2, arg3);
+    write_all(arg1, arg2, arg3);
+}
+
 const char DELIM = '\n';
 
 int main(int argc, char * argv[]) {
     if (argc < 2) {
-        write_all(1, "Error!", 6);
+        write_all(STDERR_FILENO, "Error!", 6);
         _exit(EXIT_FAILURE);
     }
     size_t k = atoi(argv[1]) + 1;
     if (k < 2) {
-        write_all(1, "Error!", 6);
+        write_all(STDERR_FILENO, "Error!", 6);
         _exit(EXIT_FAILURE);
     }
     char * buf = malloc(k + 1);
@@ -34,7 +39,7 @@ int main(int argc, char * argv[]) {
     int eof = 0;
     int ignore = 0;
     while (!eof) {
-        int r = read(0, buf + len, k - len);
+        int r = read(STDIN_FILENO, buf + len, k - len);
         if (r < 0) {
             _exit(EXIT_FAILURE);
         }
@@ -50,8 +55,7 @@ int main(int argc, char * argv[]) {
                 if (ignore) {
                     ignore = 0;
                 } else {
-                    write_all(1, buf, i + 1);
-                    write_all(1, buf, i + 1);
+                    action(STDOUT_FILENO, buf, i + 1);
                 }
                 len = len - i - 1;
                 memmove(buf, buf + i + 1, len);
