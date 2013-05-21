@@ -5,8 +5,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/wait.h>
-#include <stdio.h>
-#include <signal.h>
 
 const char * INPUT_NAME = "input.txt";
 const char * FOR_GARBAGE = "/dev/null";
@@ -22,7 +20,15 @@ int my_read(int fd, char * buf) {
     return r < 0 ? r : len;
 }
 
-void write_all(int fd, char * buf, size_t count) {
+void * my_malloc(size_t size) {
+    void * res = malloc(size);
+    if (res == NULL) {
+        _exit(EXIT_FAILURE);
+    }
+    return res;
+}
+
+void write_all(int fd, const char * buf, size_t count) {
     size_t written = 0;
     while (written < count) {
         int write_res = write(fd, buf, count - written);
@@ -49,7 +55,7 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
                 flag = 1;
             } 
             if (*default_args_number == *max_args_number) {
-                cur_default_args[*default_args_number] = malloc(sizeof(char) * CAPACITY);
+                cur_default_args[*default_args_number] = my_malloc(CAPACITY);
                 ++(*max_args_number);
             }
             strcpy(cur_default_args[*default_args_number], command);
@@ -72,15 +78,15 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
         _exit(EXIT_FAILURE);
     }
     if (*default_args_number == *max_args_number) {
-        cur_default_args[*default_args_number] = malloc(sizeof(char) * CAPACITY);
+        cur_default_args[*default_args_number] = my_malloc(CAPACITY);
         ++(*max_args_number);
     }
     strcpy(cur_default_args[*default_args_number], command);
     ++(*default_args_number);
 }
 
-short run(char * cur_command, char ** cur_default_args, size_t default_args_number, char * arg, int pipefd[2]) {
-    short OK = 0;
+int run(char * cur_command, char ** cur_default_args, size_t default_args_number, char * arg, int pipefd[2]) {
+    int OK = 0;
 
     char * tmp = cur_default_args[default_args_number];
     cur_default_args[default_args_number] = arg;
@@ -89,14 +95,14 @@ short run(char * cur_command, char ** cur_default_args, size_t default_args_numb
 
     pid_t pid = fork();
     if (pid) {
-        pid_t wpid;
         int status;
-        do {
-            wpid = wait(&status);
-            if (WIFEXITED(status) && !WEXITSTATUS(status)) {
-                OK = 1;
-            }
-        } while (wpid != pid);
+        pid_t wpid = wait(&status);
+        if (wpid != pid) {
+            _exit(EXIT_FAILURE);
+        }
+        if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+            OK = 1;
+        }
         cur_default_args[default_args_number] = tmp;
         cur_default_args[default_args_number + 1] = tmp2;
     } else {
@@ -120,12 +126,12 @@ int main() {
     int pipefd[2];
 
     short cur_command_known = 0;
-    char * cur_command = malloc(sizeof(char) * CAPACITY);
+    char * cur_command = my_malloc(CAPACITY);
     size_t default_args_number = 0;
     size_t max_args_number = 0;
-    char ** cur_default_args = malloc(sizeof(char *) * CAPACITY);
-    char * output = malloc(sizeof(char) * CAPACITY);
-    char * buf = malloc(sizeof(char) * CAPACITY);
+    char ** cur_default_args = my_malloc(sizeof(char *) * CAPACITY);
+    char * output = my_malloc(CAPACITY);
+    char * buf = my_malloc(CAPACITY);
     size_t buf_len = 0;
     short eof = 0;
 
