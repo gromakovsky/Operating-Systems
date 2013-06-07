@@ -1,21 +1,29 @@
 #!/bin/bash
 
-if [ $# = 0 ]; then
+if [ $# == 0 ]; then
     echo "Error, not enough args"
-    exit 0
+    exit 1
 fi
+
+shopt -s nullglob
+check() {
+    name="$1"
+    if [[ -L "$name" && ! -e "$name" ]]; then
+        echo "$name"
+    fi
+}
 
 scan() {
     for name in $@; do
         if [ -d "$name" ]; then
             scan "$name/*"
         fi
-        if [[ -L "$name" && ! -e "$name" ]]; then
-            echo "$name"
-        fi
+        check "$name"
     done
 }
 
 scan "$@"
+shopt -u nullglob
+
 exit 0
 

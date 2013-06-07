@@ -7,9 +7,9 @@ fi
 
 for file_name in "$@"; do
     if [ -f "$file_name" ]; then
-        read -e -p "Edit file name: " -i "$(basename "$file_name")" new_file_name
+        read -e -p "New file name for '$file_name': " -i "$(basename "$file_name")" new_file_name
         if [ "$new_file_name" ]; then
-            mv "$file_name" "$new_file_name"
+            mv "$file_name" "$(dirname "$file_name")/$new_file_name"
         fi
     fi
 done

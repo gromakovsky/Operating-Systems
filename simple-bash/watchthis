@@ -2,16 +2,15 @@
 
 if [[ "$#" < 2 ]]; then
     echo "Error, not enough args"
-    exit 0
+    exit 1
 fi
 
 interval="$1"
 shift
 command_name="$@"
-old=`$command_name`
+old="`$command_name`"
 
 while :; do
-    sleep $interval
     new=`$command_name`
     echo "Result:"
     echo $new
@@ -21,6 +20,7 @@ while :; do
         echo $diff
     fi
     old="$new"
+    sleep $interval
 done
 
 exit 0
