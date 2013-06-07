@@ -5,9 +5,10 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <errno.h>
+#include <stdio.h>
 
-const char * INPUT_NAME = "input.txt";
-const char * FOR_GARBAGE = "/dev/null";
+const char * const INPUT_NAME = "input.txt";
 const char DELIM = '\0';
 const size_t CAPACITY = 4096;
 
@@ -23,16 +24,32 @@ int my_read(int fd, char * buf) {
 void * my_malloc(size_t size) {
     void * res = malloc(size);
     if (res == NULL) {
+        perror("malloc");
         _exit(EXIT_FAILURE);
     }
     return res;
+}
+
+void my_close(int fd) {
+    if (close(fd) == -1) {
+        perror("close");
+        _exit(EXIT_FAILURE);
+    }
+}
+
+void my_dup2(int oldfd, int newfd) {
+    if (dup2(oldfd, newfd) == -1) {
+        perror("dup2");
+        _exit(EXIT_FAILURE);
+    }
 }
 
 void write_all(int fd, const char * buf, size_t count) {
     size_t written = 0;
     while (written < count) {
         int write_res = write(fd, buf, count - written);
-        if (write_res < 0) {
+        if (write_res == -1) {
+            perror("write");
             _exit(EXIT_FAILURE);
         }
         written += write_res;
@@ -48,6 +65,7 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
         if (command[i] == DELIM) {
             command[i] = 0;
             if (strlen(command) > CAPACITY) {
+                write_all(STDERR_FILENO, "Error, not enough capacity", strlen("Error, not enough capacity"));
                 _exit(EXIT_FAILURE);
             }                                    
             if (!flag) {
@@ -68,6 +86,7 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
     }
 
     if (strlen(command) > CAPACITY) {
+        write_all(STDERR_FILENO, "Error, not enough capacity", strlen("Error, not enough capacity"));
         _exit(EXIT_FAILURE);
     }                                    
     if (!flag) {
@@ -75,6 +94,7 @@ void parse_command(char * command, char * cur_command, char ** cur_default_args,
         flag = 1;
     } 
     if (*default_args_number == CAPACITY - 1) {
+         write_all(STDERR_FILENO, "Error, not enough capacity", strlen("Error, not enough capacity"));
         _exit(EXIT_FAILURE);
     }
     if (*default_args_number == *max_args_number) {
@@ -106,20 +126,19 @@ int run(char * cur_command, char ** cur_default_args, size_t default_args_number
         cur_default_args[default_args_number] = tmp;
         cur_default_args[default_args_number + 1] = tmp2;
     } else {
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[0]);
-        close(pipefd[1]);
-/*        int garbage = open(FOR_GARBAGE, O_WRONLY);
-        dup2(garbage, STDERR_FILENO);
-        close(garbage);*/
+        my_dup2(pipefd[1], STDOUT_FILENO);
+        my_close(pipefd[0]);
+        my_close(pipefd[1]);
         execvp(cur_command, cur_default_args);
+        perror("exec");
+        _exit(EXIT_FAILURE);
     }
     return OK;
 }
 
 int main() {
     int fd = open(INPUT_NAME, O_RDONLY);
-    if (fd < 0) {
+    if (fd == -1) {
         _exit(EXIT_FAILURE);
     }
 
@@ -146,16 +165,20 @@ int main() {
         for (i = 0; i != buf_len; ++i) {
             if (buf[i] == DELIM) {
                 if (cur_command_known) {
-                    pipe(pipefd);
-                    close(pipefd[1]);
+                    if (pipe(pipefd) == -1) {
+                        perror("pipe");
+                        _exit(EXIT_FAILURE);
+                    }
                     if (run(cur_command, cur_default_args, default_args_number, buf, pipefd)) {
+                        my_close(pipefd[1]);
                         int tmp = my_read(pipefd[0], output);
-                        if (tmp < 0) {
+                        if (tmp == -1) {
+                            perror("read");
                             _exit(EXIT_FAILURE);
                         }
                         write_all(STDOUT_FILENO, output, tmp); 
                     }
-                    close(pipefd[0]);
+                    my_close(pipefd[0]);
                 } else {
                     parse_command(buf, cur_command, cur_default_args, &default_args_number, &max_args_number);
                     cur_command_known = 1;
@@ -167,7 +190,7 @@ int main() {
                 }
                 buf_len -= (i + 1);
                 memmove(buf, buf + i + 1, buf_len);
-                i = -1;
+                i = (size_t) -1;
             }
         } 
     }
