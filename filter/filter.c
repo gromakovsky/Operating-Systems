@@ -3,8 +3,9 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <stdio.h>
 
-int find_delim(char delim, const char * buf, size_t from, size_t len) {
+int find_delim(const char delim, const char * buf, size_t from, size_t len) {
     size_t i;
     for (i = from; i != from + len; ++i) {
         if (buf[i] == delim) {
@@ -17,6 +18,7 @@ int find_delim(char delim, const char * buf, size_t from, size_t len) {
 void * my_malloc(size_t size) {
     void * res = malloc(size);
     if (res == NULL) {
+        perror("malloc");
         _exit(EXIT_FAILURE);
     }
     return res;
@@ -26,7 +28,8 @@ void write_all(int fd, const char * buf, size_t count) {
     size_t written = 0;
     while (written < count) {
         int write_res = write(fd, buf, count - written);
-        if (write_res < 0) {
+        if (write_res == -1) {
+            perror("write");
             _exit(EXIT_FAILURE);
         }
         written += write_res;
@@ -52,6 +55,8 @@ void run_cmd(char * buf, size_t from, size_t len, int cmd_argc, char ** cmd_argv
         free(last_arg);
     } else {
         execvp(cmd_argv[0], cmd_argv);
+        perror("exec");
+        _exit(EXIT_FAILURE);
     }
 }
 
