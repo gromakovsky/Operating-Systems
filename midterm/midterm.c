@@ -26,14 +26,6 @@ void * my_malloc(size_t size) {
     return res;
 }
 
-void * my_realloc(void * ptr, size_t size) {
-    void * res = realloc(ptr, size);
-    if (res == NULL) {
-        _exit(EXIT_FAILURE);
-    }
-    return res;
-}
-
 void my_close(int fd) {
     if (close(fd) == -1) {
         perror("close");
