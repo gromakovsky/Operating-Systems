@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 void write_all(int fd, const char * buf, size_t count) {
     size_t written = 0;
