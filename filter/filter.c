@@ -4,6 +4,8 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 int find_delim(const char delim, const char * buf, size_t from, size_t len) {
     size_t i;
@@ -54,7 +56,24 @@ void run_cmd(char * buf, size_t from, size_t len, int cmd_argc, char ** cmd_argv
         }
         free(last_arg);
     } else {
+        int fd = open("/dev/null", O_WRONLY);
+        if (fd == -1) {
+            perror("open");
+            _exit(EXIT_FAILURE);
+        }
+        int dup2_res = dup2(fd, STDOUT_FILENO);
+        if (dup2_res == -1) {
+            perror("dup2");
+            _exit(EXIT_FAILURE);
+        }
+        int close_res = close(fd);
+        if (close_res == -1) {
+            perror("close");
+            _exit(EXIT_FAILURE);
+        }
+
         execvp(cmd_argv[0], cmd_argv);
+
         perror("exec");
         _exit(EXIT_FAILURE);
     }
@@ -108,6 +127,10 @@ int main(int argc, char * argv[]) {
             _exit(EXIT_FAILURE);
         }
         int r = read(0, buffer + len, buffer_size - len);
+        if (r == -1) {
+            perror("read");
+            _exit(EXIT_FAILURE);
+        }
         eof = !r;
         from = len;
         len += r;
