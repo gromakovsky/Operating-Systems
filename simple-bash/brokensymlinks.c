@@ -1,8 +1,3 @@
-//_BSD_SOURCE is required for lstat(2)
-#ifndef _BSD_SOURCE
-#define _BSD_SOURCE
-#endif
-
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
