@@ -16,13 +16,23 @@ const char * const SERVICE = "8822";
 const int BACKLOG = 32;
 const size_t CAPACITY = 4096;
 
-int my_read(int fd, char * buf) {
+size_t my_read(int fd, char * buf) {
     int r;
-    int len = 0;
+    size_t len = 0;
     while ((r = read(fd, buf + len, CAPACITY - len)) > 0) {
+        size_t i;
+        for (i = len; i != len + r; ++i) {
+            if (buf[i] == '\0') {
+                return i;
+            }
+        }
         len += r;
     }
-    return r < 0 ? r : len;
+    if (r == -1) {
+        perror("read");
+        _exit(EXIT_FAILURE);
+    }
+    return len;
 }
 
 void write_all(int fd, const char * buf, size_t count) {
@@ -157,7 +167,6 @@ int main() {
                         }
                         len += r;
                         int written = write(cfd, buf, len);
-//                        sleep(1);
                         if (written == -1) {
                             perror("write");
                             my_close(cfd);
