@@ -44,11 +44,13 @@ int main() {
             perror("setsid");
             _exit(EXIT_FAILURE);
         }
+
         int log_fd = dup(STDOUT_FILENO);
         if (log_fd == -1) {
             perror("dup");
             _exit(EXIT_FAILURE);
         }
+
         struct addrinfo hints;
         struct addrinfo * result;
         memset(&hints, 0, sizeof(struct addrinfo));
@@ -105,61 +107,17 @@ int main() {
                 }
                 if (fork()) {
                     my_close(slave);
-                    char buf[CAPACITY]; //from master to cfd
-                    size_t len = 0;
-                    char buf2[CAPACITY]; //from cfd to master 
-                    size_t len2 = 0;
-                    struct pollfd pollfds[2];
-                    pollfds[0].fd = master;
-                    pollfds[0].events = POLLIN | POLLOUT | POLLERR | POLLHUP;
-                    pollfds[1].fd = cfd;
-                    pollfds[1].events = POLLIN | POLLOUT | POLLERR | POLLHUP;
-                    while (1) {
-                        int poll_res = poll(pollfds, 2, -80);
-                        if (poll_res == -1) {
-                            if (errno == EINTR) {
-                                continue;    
-                            } else {
-                                perror("poll");
-                                _exit(EXIT_FAILURE);
-                            }
-                        }
-                        if ((pollfds[0].revents & POLLIN) && (len < CAPACITY)) {
-                            int r = read(master, buf + len, CAPACITY - len);    
-                            if (r == -1) {
-                                perror("read");
-                                _exit(EXIT_FAILURE);
-                            }
-                        }
-                        if ((pollfds[1].revents & POLLIN) && (len2 < CAPACITY)) {
-                            int r = read(master, buf2 + len2, CAPACITY - len2);
-                            if (r == -1) {
-                                perror("read");
-                                _exit(EXIT_FAILURE);
-                            }
-                        }
-                        if ((pollfds[0].revents & POLLOUT) && (len > 0)) {
-                            int w = write(cfd, buf, len);    
-                            if (w == -1) {
-                                perror("write");
-                                _exit(EXIT_FAILURE);
-                            }
-                            len -= w;
-                            memmove(buf, buf + w, len);
-                        }
-                        if ((pollfds[1].revents & POLLOUT) && (len2 > 0)) {
-                            int w = write(cfd, buf2, len2);    
-                            if (w == -1) {
-                                perror("write");
-                                _exit(EXIT_FAILURE);
-                            }
-                            len2 -= w;
-                            memmove(buf2, buf2 + w, len2);
-                        }
-                    }
+
+                    sleep(20);
+
+
+
+
                     my_close(master);
                     my_close(cfd);
-                    _exit(EXIT_FAILURE);
+                    write_all(log_fd, "Disconnected\n", strlen("Disconnected\n"));
+                    my_close(log_fd);
+                    _exit(EXIT_SUCCESS);
                 } else {
                     my_close(master);
                     my_close(cfd);
@@ -171,7 +129,7 @@ int main() {
                     
                     int pty_fd = open(buf, O_RDWR);
                     if (pty_fd == -1) {
-                        perror("open");
+                        perror(buf);
                         _exit(EXIT_FAILURE);
                     }
                     my_close(pty_fd);
@@ -181,7 +139,8 @@ int main() {
                     dup2(slave, STDERR_FILENO);
 
                     my_close(slave);
-                    execlp("bash", "bash", NULL);
+                    execl("/bin/bash", "bash", NULL);
+                    perror("execl");
                     _exit(EXIT_FAILURE);
                 }
             } else {
