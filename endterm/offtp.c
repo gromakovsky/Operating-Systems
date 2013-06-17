@@ -154,17 +154,16 @@ int main() {
                         _exit(EXIT_FAILURE);
                     }
                     size_t len = 0;
-                    while (1) {
+                    int eof = 0;
+                    while (!eof) {
                         int r = read(fd, buf + len, CAPACITY - len);
-                        if (r == 0) {
-                            break;
-                        }
                         if (r == -1) {
                             perror("read");
                             my_close(cfd);
                             free(buf);
                             _exit(EXIT_FAILURE);
                         }
+                        eof = !r;
                         len += r;
                         int written = write(cfd, buf, len);
                         if (written == -1) {
