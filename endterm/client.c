@@ -13,7 +13,6 @@
 #include <sys/stat.h>
 
 const char * const SERVICE = "8822";
-const int BACKLOG = 32;
 const size_t CAPACITY = 4096;
 const char * const ERROR_MSG = "err ";
 const char * const OK_MSG = "OK";
@@ -166,8 +165,8 @@ int main(int argc, char * argv[]) {
         }
         size -= len;
  
-        if (size == 0) {
-            write_all(STDOUT_FILENO, "\nSuccess", 0);
+        if (size != 0) {
+            write_all(STDERR_FILENO, "Error occured. File was not fully received", 0);
         }
 
     }
