@@ -14,8 +14,12 @@
 const char * const SERVICE = "8822";
 const int BACKLOG = 32;
 const size_t CAPACITY = 4096;
+const int POLL_TIMEOUT = 30000;
 
 void write_all(int fd, const char * buf, size_t count) {
+    if (!count) {
+        count = strlen(buf) + 1;
+    }
     size_t written = 0;
     while (written < count) {
         int write_res = write(fd, buf, count - written);
@@ -30,6 +34,13 @@ void write_all(int fd, const char * buf, size_t count) {
 void my_close(int fd) {
     if (close(fd) == -1) {
         perror("close");
+        _exit(EXIT_FAILURE);
+    }
+}
+
+void my_dup2(int oldfd, int newfd) {
+    if (dup2(oldfd, newfd) == -1) {
+        perror("dup2");
         _exit(EXIT_FAILURE);
     }
 }
@@ -97,25 +108,91 @@ int main() {
                 perror("accept");
                 _exit(EXIT_FAILURE);
             }
-            write_all(log_fd, "Connected\n", strlen("Connected\n"));
+            write_all(log_fd, "Connected\n", 0);
             if (!fork()) { //a
                 int master, slave;
-                char buf[CAPACITY];
-                if (openpty(&master, &slave, buf, NULL, NULL) == -1) {
+                char name[CAPACITY];
+                if (openpty(&master, &slave, name, NULL, NULL) == -1) {
                     perror("openpty");
                     _exit(EXIT_FAILURE);
                 }
                 if (fork()) {
                     my_close(slave);
 
-                    sleep(20);
+                    const nfds_t nfds = 2;
+                    char * buf[nfds];
+                    size_t len[nfds];
+                    size_t i;
+                    for (i = 0; i != nfds; ++i) {
+                        buf[i] = malloc(CAPACITY);
+                        len[i] = 0;
+                    }
+
+                    struct pollfd pollfd[nfds];
+                    pollfd[0].fd = master;
+                    pollfd[0].events = POLLIN;
+                    pollfd[1].fd = cfd;
+                    pollfd[1].events = POLLIN;
+
+                    const short ERROR_EVENTS = POLLERR | POLLHUP | POLLNVAL;
+                    int finished = 0;
+
+                    write_all(cfd, "Rshell is working\n", 0);
+                    write_all(master, "uname", 0);
+
+                    while (!finished) {
+                        int poll_res = poll(pollfd, nfds, POLL_TIMEOUT);
+//                        printf("%d\n", poll_res);
+//                        sleep(2);
+                        if (poll_res == -1) {
+                            perror("poll");
+                            _exit(EXIT_FAILURE);
+                        }
+                        if (poll_res == 0) {
+                            write_all(cfd, "Time is out. Disconnecting\n", 0);
+                            break;
+                        }
+                        for (i = 0; i != nfds; ++i) {
+                            size_t j = 1 - i;
+                            if (pollfd[i].revents & ERROR_EVENTS) {
+                                write_all(cfd, "Error occured. Disconnecting\n", 0);
+                                finished = 1;
+                            }
+                            if (pollfd[i].events & POLLIN) {
+                                int r = read(pollfd[i].fd, buf[i] + len[i], CAPACITY - len[i]);
+                                if (r == 0) {
+                                    finished = 1;
+                                }
+                                if (r == -1) {
+                                    perror("read");
+                                    finished = 1;
+                                }
+                                len[i] += r;
+                                pollfd[j].events |= POLLOUT;
+                            }
+                            if (pollfd[j].revents & POLLOUT) {
+                                int w = write(pollfd[j].fd, buf[i], len[i]);
+                                if (w == -1) {
+                                    perror("write");
+                                    finished = 1;
+                                }
+                                len[i] -= w;
+                                if ((len[j] == 0) && (pollfd[j].events & POLLOUT)) {
+                                    pollfd[i].events ^= POLLOUT;
+                                }
+                                memmove(buf[i], buf[i] + w, len[i]);
+                            }
+                        }
+                    }
 
 
-
+                    for (i = 0; i != nfds; ++i) {
+                        free(buf[i]);
+                    }
 
                     my_close(master);
                     my_close(cfd);
-                    write_all(log_fd, "Disconnected\n", strlen("Disconnected\n"));
+                    write_all(log_fd, "Disconnected\n", 0);
                     my_close(log_fd);
                     _exit(EXIT_SUCCESS);
                 } else {
@@ -127,17 +204,16 @@ int main() {
                         _exit(EXIT_FAILURE);
                     }
                     
-                    int pty_fd = open(buf, O_RDWR);
+                    int pty_fd = open(name, O_RDWR);
                     if (pty_fd == -1) {
-                        perror(buf);
+                        perror(strcat("open ", name));
                         _exit(EXIT_FAILURE);
                     }
                     my_close(pty_fd);
 
-                    dup2(slave, STDIN_FILENO);
-                    dup2(slave, STDOUT_FILENO);
-                    dup2(slave, STDERR_FILENO);
-
+                    my_dup2(slave, STDIN_FILENO);
+                    my_dup2(slave, STDOUT_FILENO);
+                    my_dup2(slave, STDERR_FILENO);
                     my_close(slave);
                     execl("/bin/bash", "bash", NULL);
                     perror("execl");
