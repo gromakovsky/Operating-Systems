@@ -138,12 +138,9 @@ int main() {
                     int finished = 0;
 
                     write_all(cfd, "Rshell is working\n", 0);
-                    write_all(master, "uname", 0);
 
                     while (!finished) {
                         int poll_res = poll(pollfd, nfds, POLL_TIMEOUT);
-//                        printf("%d\n", poll_res);
-//                        sleep(2);
                         if (poll_res == -1) {
                             perror("poll");
                             _exit(EXIT_FAILURE);
