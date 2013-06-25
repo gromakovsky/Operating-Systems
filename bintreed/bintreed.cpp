@@ -37,11 +37,6 @@ void write_all(int fd, const char * buf, size_t count) {
 size_t read_all(int fd, char * buf) {
     int r;
     size_t len = 0;
-    r = read(fd, buf, CAPACITY - len);
-    if (buf[r - 1] == '\n') {
-        buf[r - 1] = '\0';
-    }
-    return r;
     while (true) {
         r = read(fd, buf, CAPACITY - len);
         if (r == -1) {
@@ -50,6 +45,13 @@ size_t read_all(int fd, char * buf) {
         }
         if (r == 0) {
             break;
+        }
+        size_t i;
+        for (i = len; i != len + r; ++i) {
+            if (buf[i] == '\0' || buf[i] == '\n') {
+                buf[i] = '\0';
+                return i;
+            }
         }
         len += r;
     }
@@ -260,9 +262,6 @@ int main() {
         }
 
         node * root = new node();
-/*        root->value = "X";
-        root->right = new node();
-        root->right->value = "Y";*/
 
         pollfd fds[MAX_CLIENTS + 1];
         fds[0].fd = sockfd;
@@ -272,7 +271,6 @@ int main() {
         const short ERRORS = POLLERR | POLLHUP | POLLNVAL;
 
         while (true) {
-//            write_all(STDOUT_FILENO, "Poll\n", 0);
             int poll_res = poll(fds, nfds, POLL_TIMEOUT);
             if (poll_res == -1) {
                 perror("poll");
@@ -302,15 +300,14 @@ int main() {
                                 std::string s(buf + strlen(command) + 1);
                                 size_t t = s.find(' ');
                                 if (t == std::string::npos) {
-                                    write_all(fds[i].fd, "Invalid arguments\n", 0);
+                                    write_all(fds[i].fd, "Can't find ' '\n", 0);
                                     break;
                                 }
                                 std::string where = s.substr(0, t);
                                 if (where.back() != 'h') {
-                                    write_all(fds[i].fd, "Invalid arguments\n", 0);
+                                    write_all(fds[i].fd, "Can't find terminating 'h' in path\n", 0);
                                     break;
                                 }
-                                node * p = move_to_parent(root, where);
                                 s.erase(0, t + 1);
                                 node * tree = parse_tree(s);
                                 if (tree == nullptr) {
@@ -319,9 +316,10 @@ int main() {
                                 }
                                 if (where == "h") {
                                     root = tree;
-                                    write_all(fds[i].fd, "Added\n", 0);
+                                    write_all(fds[i].fd, "Added successfully\n", 0);
                                     break;
                                 }
+                                node * p = move_to_parent(root, where);
                                 if (p == nullptr) {
                                     write_all(fds[i].fd, "This node doesn't exist\n", 0);
                                     delete tree;
@@ -329,16 +327,16 @@ int main() {
                                 }
                                 if (where[where.length() - 2] == 'l') {
                                     p->left = parse_tree(s);
-                                    write_all(fds[i].fd, "Added\n", 0);
+                                    write_all(fds[i].fd, "Added successfully\n", 0);
                                     break;
                                 }
                                 if (where[where.length() - 2] == 'r') {
                                     p->right = parse_tree(s);
-                                    write_all(fds[i].fd, "Added\n", 0);
+                                    write_all(fds[i].fd, "Added successfully\n", 0);
                                     break;
                                 }
                                 delete tree;
-                                write_all(fds[i].fd, "Invalid arguments\n", 0);
+                                write_all(fds[i].fd, "Can't add. Invalid arguments or internal error\n", 0);
                             } else {
                                 write_all(fds[i].fd, "Invalid command\n", 0);
                             }
@@ -349,16 +347,19 @@ int main() {
                             buf[strlen(command)] = '\0';
                             if (!strcmp(buf, command)) {
                                 std::string s(buf + strlen(command) + 1);
+                                if (s.back() != 'h') {
+                                    write_all(fds[i].fd, "Can't find terminating 'h' in path\n", 0);
+                                    break;
+                                }
                                 node * tree = move(root, buf + strlen(command) + 1);
                                 if (tree == nullptr) {
-                                    write_all(fds[i].fd, "This node doesn't exist", 0);
+                                    write_all(fds[i].fd, "This node doesn't exist\n", 0);
                                 } else {
                                     write_all(fds[i].fd, tree_to_string(tree).c_str(), 0);
                                 }
                             } else {
-                                write_all(fds[i].fd, "Invalid command", 0);
+                                write_all(fds[i].fd, "Invalid command\n", 0);
                             }
-                            write_all(fds[i].fd, "\n", 1);
                             break;
                         }
                         case 'd': {
@@ -367,10 +368,9 @@ int main() {
                             if (!strcmp(buf, command)) {
                                 std::string s(buf + strlen(command) + 1);
                                 if (s.back() != 'h') {
-                                    write_all(fds[i].fd, "Invalid arguments\n", 0);
+                                    write_all(fds[i].fd, "Can't find terminating 'h' in path\n", 0);
                                     break;
                                 }
-                                node * p = move_to_parent(root, s);
                                 if (s == "h") {
                                     if (root->left) {
                                         delete root->left;
@@ -381,9 +381,10 @@ int main() {
                                         root->right = nullptr;
                                     }
                                     root->value = "";
-                                    write_all(fds[i].fd, "Deleted\n", 0);
+                                    write_all(fds[i].fd, "Deleted successfully\n", 0);
                                     break;
                                 }
+                                node * p = move_to_parent(root, s);
                                 if (p == nullptr) {
                                     write_all(fds[i].fd, "This node doesn't exist\n", 0);
                                     break;
@@ -391,16 +392,16 @@ int main() {
                                 if (s[s.length() - 2] == 'l') {
                                     delete p->left;
                                     p->left = nullptr;
-                                    write_all(fds[i].fd, "Deleted\n", 0);
+                                    write_all(fds[i].fd, "Deleted successfully\n", 0);
                                     break;
                                 }
                                 if (s[s.length() - 2] == 'r') {
                                     delete p->right;
                                     p->right = nullptr;
-                                    write_all(fds[i].fd, "Deleted\n", 0);
+                                    write_all(fds[i].fd, "Deleted successfully\n", 0);
                                     break;
                                 }
-                                write_all(fds[i].fd, "Invalid arguments\n", 0);
+                                write_all(fds[i].fd, "Can't add. Invalid arguments or internal error\n", 0);
                             } else {
                                 write_all(fds[i].fd, "Invalid command\n", 0);
                             }
