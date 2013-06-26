@@ -12,7 +12,7 @@
 #include <errno.h>
 #include <string>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 
 const char * const SERVICE = "8822";
 const int BACKLOG = 32;
@@ -38,10 +38,10 @@ void my_close(int fd) {
 struct my_struct {
     char * buf;
     size_t len;
-    short state; // 0 -- unknown, 1 -- hello, 2 -- to_who, 3 -- msg
+    short state; // 0 -- unknown, 1 -- hello, 2 -- addressee, 3 -- msg
     std::string name;
-    std::string to_who;
-    bool endl;
+    std::string addressee;
+    bool endl; // true means that last time buf had terminating '\n'
 
     my_struct() {
         buf = my_malloc(CAPACITY);
@@ -110,14 +110,13 @@ int main() {
         nfds_t nfds = 1;
 
         my_struct inputs[MAX_CLIENTS + 1];
-        std::map<std::string, size_t> map;
-//        std::string outputs[MAX_CLIENTS + 1];
-        std::map<std::string, std::string> outputs;
+        std::unordered_map<std::string, size_t> map; // map[somename] = index of my_struct with name == somename
+        std::unordered_map<std::string, std::string> outputs; // outputs[somename] = message that we need to send to somename
 
-        const short ERRORS = POLLERR | POLLHUP | POLLNVAL;
+        const short ERRORS = POLLERR | POLLHUP | POLLNVAL | POLLRDHUP;
 
-        const char * HELLO = "Hello, my name is";
-        const char * TO = "To";
+        const char * HELLO = "Hello, my name is ";
+        const char * TO = "To ";
 
         while (true) {
             int poll_res = poll(fds, nfds, POLL_TIMEOUT);
@@ -125,14 +124,18 @@ int main() {
                 perror("poll");
                 _exit(EXIT_FAILURE);
             }
+
             for (size_t i = 1; i != nfds; ++i) {
                 if (fds[i].revents & ERRORS) {
+//                    std::cout << "ERRORS: " << i << " " << inputs[i].name << std::endl;
                     fds[i].events = 0;
                     fds[i].fd = -1;
+                    map.erase(inputs[i].name);
                     continue;
                 }
 
                 if (fds[i].revents & POLLIN) {
+//                    std::cout << "POLLIN: " << i << " " << inputs[i].name << std::endl;
                     int r = read(fds[i].fd, inputs[i].buf + inputs[i].len, CAPACITY - inputs[i].len);
                     if (r == -1) {
                         perror("read");
@@ -145,17 +148,17 @@ int main() {
                     printf("Buffer length: %d\n", inputs[i].len);*/
                     if (inputs[i].state == 0) {
                         if (!strncmp(inputs[i].buf, HELLO, strlen(HELLO))) {
-                            memmove(inputs[i].buf, inputs[i].buf + strlen(HELLO), inputs[i].len - strlen(HELLO));
                             inputs[i].len -= strlen(HELLO);
+                            memmove(inputs[i].buf, inputs[i].buf + strlen(HELLO), inputs[i].len);
                             inputs[i].state = 1;
                         }
                         if (!strncmp(inputs[i].buf, TO, strlen(TO))) {
-                            memmove(inputs[i].buf, inputs[i].buf + strlen(TO), inputs[i].len - strlen(TO));
                             inputs[i].len -= strlen(TO);
+                            memmove(inputs[i].buf, inputs[i].buf + strlen(TO), inputs[i].len);
                             inputs[i].state = 2;
                         }
                         if (inputs[i].len >= strlen(HELLO)) {
-                            fprintf(stderr, "Invalid format\n");
+                            fprintf(stderr, "Invalid format or internal error\n");
                             _exit(EXIT_FAILURE);
                         }
                     }
@@ -166,13 +169,13 @@ int main() {
                                 inputs[i].buf[j] = '\0';
                                 inputs[i].name = inputs[i].buf;
                                 ++j;
-                                memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len - j);
                                 inputs[i].len -= j;
+                                memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len);
                                 inputs[i].state = 0;
 /*                                if (map.count(inputs[i].name)) {
                                     fprintf(stderr, "Name already exists\n");
                                 }*/
-                                map.insert(std::make_pair(inputs[i].name, i));
+                                map[inputs[i].name] = i;
                                 if (!outputs[inputs[i].name].empty()) {
                                     fds[i].events |= POLLOUT;
                                 }
@@ -182,73 +185,54 @@ int main() {
                         }
                     }
                     if (inputs[i].state == 2) {
-/*                        size_t j;
-                        if (inputs[i].to_who.empty()) {
-                            for (j = 0; j != inputs[i].len; ++j) {
-                                if (inputs[i].buf[j] == '\n') {
-                                    inputs[i].buf[j] = '\0';
-                                    inputs[i].to_who = inputs[i].buf;
-                                    ++j;
-                                    memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len - j);
-                                    inputs[i].len -= j;
-                                    inputs[i].state = 3;
-                                    if (map.count(inputs[i].to_who)) {
-                                        fds[map[inputs[i].to_who]].events |= POLLOUT;
-                                        outputs[map[inputs[i].to_who]] = "From" + inputs[i].name + ":\n";
-                                    }
-                                    break;
-                                }
-                            }
-                        }*/
                         size_t j;
-                        if (inputs[i].to_who.empty()) {
-                            for (j = 0; j != inputs[i].len; ++j) {
-                                if (inputs[i].buf[j] == '\n') {
-                                    inputs[i].buf[j] = '\0';
-                                    inputs[i].to_who = inputs[i].buf;
-                                    ++j;
-                                    memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len - j);
-                                    inputs[i].len -= j;
-                                    break;
-                                }
+                        for (j = 0; j != inputs[i].len; ++j) {
+                            if (inputs[i].buf[j] == '\n') {
+                                inputs[i].buf[j] = '\0';
+                                inputs[i].addressee = inputs[i].buf;
+                                ++j;
+                                inputs[i].len -= j;
+                                memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len);
+                                inputs[i].state = 3;
+                                break;
                             }
                         }
-                        if (map.count(inputs[i].to_who)) {
-                            fds[map[inputs[i].to_who]].events |= POLLOUT;
-//                            outputs[map[inputs[i].to_who]] = "From" + inputs[i].name + ":\n";
-                            outputs[inputs[i].to_who] = "From" + inputs[i].name + ":\n";
-                            inputs[i].state = 3;
+                        outputs[inputs[i].addressee] = "From " + inputs[i].name + ":\n";
+                        if (map.count(inputs[i].addressee)) {
+                            fds[map[inputs[i].addressee]].events |= POLLOUT;
                         }
                     }
                     if (inputs[i].state == 3) {
-                        std::string index = inputs[i].to_who;
+                        std::string addressee = inputs[i].addressee;
                         if (inputs[i].buf[0] == '\n' && inputs[i].endl) {
-                            memmove(inputs[i].buf, inputs[i].buf + 1, inputs[i].len - 1);
                             inputs[i].len -= 1;
+                            memmove(inputs[i].buf, inputs[i].buf + 1, inputs[i].len);
                             inputs[i].state = 0;
+                            outputs[addressee] += "\n";
                         } else {
-                            size_t j;
-                            for (j = 0; (inputs[i].len > 0) && (j < inputs[i].len - 1); ++j) {
-                                if (inputs[i].buf[j] == '\n' && inputs[i].buf[j + 1] == '\n') {
-                                    ++j;
-                                    std::string tmp(inputs[i].buf, inputs[i].buf + j);
-                                    ++j;
-                                    memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len - j);
-                                    outputs[index] += tmp;
+                            if (inputs[i].len > 0) {
+                                size_t j;
+                                for (j = 1; j != inputs[i].len; ++j) {
+                                    if (inputs[i].buf[j - 1] == '\n' && inputs[i].buf[j] == '\n') {
+                                        ++j;
+                                        outputs[addressee] += std::string(inputs[i].buf, inputs[i].buf + j);
+                                        inputs[i].len -= j;
+                                        memmove(inputs[i].buf, inputs[i].buf + j, inputs[i].len);
+                                        inputs[i].state = 0;
+                                        break;
+                                    }
+                                }
+                                if (j == inputs[i].len) {
+                                    outputs[addressee] += std::string(inputs[i].buf, inputs[i].buf + inputs[i].len);
                                     inputs[i].len = 0;
                                 }
                             }
-                            if (j == inputs[i].len - 1) {
-                                std::string tmp(inputs[i].buf, inputs[i].buf + inputs[i].len);
-                                outputs[index] += tmp;
-                                inputs[i].len = 0;
-                            }
                         }
-                        inputs[i].endl = (outputs[index].back() == '\n');
-//                        printf("Output is: %s\n", outputs[index].c_str());
+                        inputs[i].endl = (outputs[addressee].back() == '\n');
+//                        printf("Output is: %s\n", outputs[addressee].c_str());
 //                        printf("Endl: %d\n", inputs[i].endl);
-                        if (!outputs[index].empty()) {
-                            fds[map[index]].events |= POLLOUT;
+                        if (!outputs[addressee].empty()) {
+                            fds[map[addressee]].events |= POLLOUT;
                         }
                     }
                 }
@@ -256,15 +240,17 @@ int main() {
                 if (fds[i].revents & POLLOUT) {
                     std::string name = inputs[i].name;
                     if (!outputs[name].empty()) {
-//                        printf("POLLOUT\n");
+//                        std::cout << "POLLOUT: " << i << " " << name << std::endl;
                         int w = write(fds[i].fd, outputs[name].c_str(), outputs[name].size());
                         if (w == -1) {
                             perror("write");
                             _exit(EXIT_FAILURE);
                         }
+//                        std::cout << "Written: " << std::string(outputs[name].begin(), outputs[name].begin() + w) << std::endl;
                         outputs[name].erase(0, w);
+//                        std::cout << "Erased: " << w << std::endl;
                         if (outputs[name].empty()) {
-                            fds[i].events = POLLIN;
+                            fds[i].events = POLLIN | POLLRDHUP;
                         }
                     }
                 }
@@ -276,7 +262,7 @@ int main() {
                     socklen_t peer_addr_len = sizeof(struct sockaddr);
                     int new_client = accept(sockfd, &peer_addr, &peer_addr_len); 
                     fds[nfds].fd = new_client;
-                    fds[nfds].events = POLLIN;
+                    fds[nfds].events = POLLIN | POLLRDHUP;
                     ++nfds;
                 }
             }
