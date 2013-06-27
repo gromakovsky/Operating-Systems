@@ -17,8 +17,9 @@ scan() {
     for name in $@; do
         if [ -d "$name" ]; then
             scan "$name/*"
+        else
+            check "$name"
         fi
-        check "$name"
     done
 }
 
@@ -26,4 +27,3 @@ scan "$@"
 shopt -u nullglob
 
 exit 0
-

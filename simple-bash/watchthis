@@ -7,17 +7,16 @@ fi
 
 interval="$1"
 shift
-command_name="$@"
-old="`$command_name`"
+command="$@"
 
 while :; do
-    new=`$command_name`
+    new="$($command)"
     echo "Result:"
-    echo $new
-    diff="$( diff -u <(echo "$old") <(echo "$new") )"
+    echo "$new"
+    diff="$(diff -u <(echo "$old") <(echo "$new"))"
     if [ "$diff" ]; then
         echo "Unified diff:"
-        echo $diff
+        echo "$diff"
     fi
     old="$new"
     sleep $interval
