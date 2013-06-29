@@ -132,15 +132,9 @@ int main() {
                     fds[i].fd = -1;
                     fds[enemy(i)].events = 0;
                     fds[enemy(i)].fd = -1;*/
-                    for (size_t j = i + 1; j != nfds; ++j) {
-                        fds[j - 1] = fds[j];
-                        inputs[j - 1] = inputs[j];
-                    }
-                    for (size_t j = enemy(i) + 1; j != nfds; ++j) {
-                        fds[j - 1] = fds[j];
-                        inputs[j - 1] = inputs[j];
-                    }
-                    --nfds;
+                    fds[i] = fds[nfds - 1];
+                    fds[enemy(i)] = fds[enemy(nfds - 1)];
+                    nfds -= 2;
                     continue;
                 }
 
@@ -210,15 +204,9 @@ int main() {
                         int w = write(fds[i].fd, inputs[i].output.c_str(), inputs[i].output.length());
                         if (w == -1) {
                             perror("write");
-                            for (size_t j = i + 1; j != nfds; ++j) {
-                                fds[j - 1] = fds[j];
-                                inputs[j - 1] = inputs[j];
-                            }
-                            for (size_t j = enemy(i) + 1; j != nfds; ++j) {
-                                fds[j - 1] = fds[j];
-                                inputs[j - 1] = inputs[j];
-                            }
-                            --nfds;
+                            fds[i] = fds[nfds - 1];
+                            fds[enemy(i)] = fds[enemy(nfds - 1)];
+                            nfds -= 2;
                         } else {
                             inputs[i].output.erase(0, w);
     //                        std::cout << "POLLOUT: " << i << " " << name << std::endl;
