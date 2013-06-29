@@ -57,6 +57,15 @@ size_t enemy(size_t i) {
     return i % 2 == 0 ? i - 1 : i + 1;
 }
 
+void handle_error(const char * name, pollfd fds[], my_struct inputs[], size_t i, nfds_t * nfds) {
+    perror(name);
+    fds[i] = fds[*nfds - 1];
+    fds[enemy(i)] = fds[enemy(*nfds - 1)];
+    inputs[i] = inputs[*nfds - 1];
+    inputs[enemy(i)] = inputs[enemy(*nfds - 1)];
+    *nfds -= 2;
+}
+
 int main() {
     int pid = fork();
     if (pid) {
@@ -132,9 +141,7 @@ int main() {
                     fds[i].fd = -1;
                     fds[enemy(i)].events = 0;
                     fds[enemy(i)].fd = -1;*/
-                    fds[i] = fds[nfds - 1];
-                    fds[enemy(i)] = fds[enemy(nfds - 1)];
-                    nfds -= 2;
+                    handle_error("error", fds, inputs, i, &nfds);
                     continue;
                 }
 
@@ -143,8 +150,7 @@ int main() {
                     size_t j = enemy(i);
                     int r = read(fds[i].fd, inputs[i].buf + inputs[i].len, CAPACITY - inputs[i].len);
                     if (r == -1) {
-                        perror("read");
-                        _exit(EXIT_FAILURE);
+                        handle_error("read", fds, inputs, i, &nfds);
                     }
                     inputs[i].len += r;
                     if (inputs[i].state) {
@@ -203,10 +209,7 @@ int main() {
                     if (!inputs[i].output.empty()) {
                         int w = write(fds[i].fd, inputs[i].output.c_str(), inputs[i].output.length());
                         if (w == -1) {
-                            perror("write");
-                            fds[i] = fds[nfds - 1];
-                            fds[enemy(i)] = fds[enemy(nfds - 1)];
-                            nfds -= 2;
+                            handle_error("write", fds, inputs, i, &nfds);
                         } else {
                             inputs[i].output.erase(0, w);
     //                        std::cout << "POLLOUT: " << i << " " << name << std::endl;
